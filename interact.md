@@ -1,141 +1,335 @@
-# Workspace Refactor Plan
+# Track Page Plan
 
-Goal: split this project into separate `web` and `server` crates, with a third shared crate for data types used by both.
+The Track page should keep the selector/switch architecture, even though there is only one tracking type right now.
 
-## Proposed Layout
+Reason: later each selected type can render a different form with different fields.
+
+Current intended structure:
 
 ```text
-challenge-pot/
-  Cargo.toml
-  Cargo.lock
-  interact.md
-
-  common/
-    Cargo.toml
-    src/
-      lib.rs
-
-  web/
-    Cargo.toml
-    index.html
-    main.css
-    src/
-      main.rs
-      components.rs
-      components/
-        bottom_bar.rs
-      pages.rs
-      pages/
-        about.rs
-        leaderboard.rs
-        track.rs
-
-  server/
-    Cargo.toml
-    src/
-      main.rs
+web/src/pages/
+  track.rs
+  track/
+    sugar_grams_form.rs
 ```
 
-## Where Shared Structs Should Go
-
-Use a third crate named `common`.
-
-That crate should contain structs/enums that both the web frontend and server API need to agree on.
-
-Examples:
+Current shared type:
 
 ```rust
-pub struct FoodEntry {
-    pub name: String,
-    pub sugar_grams: f32,
+pub enum TrackEntryKind {
+    SugarGrams,
 }
 ```
 
-Good things to keep in `common`:
+# Parent Page
 
-- request structs
-- response structs
-- shared domain structs
-- enums used by both client and server
-- simple validation constants
+`web/src/pages/track.rs` should own:
 
-Avoid putting these in `common`:
+- the selected `TrackEntryKind` signal
+- the selector
+- the reactive `match`
+- choosing which child form to render
 
-- database code
-- HTTP handlers
-- Leptos components
-- server-only auth/session logic
-- browser-only UI state
+This is the right shape:
 
-The rule of thumb: if both the REST API and the Leptos app need to know the same shape of data, it belongs in `common`.
+```rust
+let (kind, set_kind) = signal(TrackEntryKind::SugarGrams);
 
-## Cargo Workspace
+view! {
+    <section class="page page--track">
+        <header class="page-header">
+            <h1 class="page-title">"Track"</h1>
+            <p class="page-subtitle">"Log sugar from something you just ate."</p>
+        </header>
 
-The root `Cargo.toml` should become a workspace file:
+        <label class="field">
+            <span class="field-label">"Type"</span>
+            <select
+                class="field-input"
+                on:change=move |event| {
+                    let selected = match event_target_value(&event).as_str() {
+                        "sugar-grams" => TrackEntryKind::SugarGrams,
+                        _ => TrackEntryKind::SugarGrams,
+                    };
 
-```toml
-[workspace]
-members = ["common", "web", "server"]
-resolver = "3"
+                    set_kind.set(selected);
+                }
+            >
+                <option value="sugar-grams">"Sugar grams"</option>
+            </select>
+        </label>
+
+        {move || match kind.get() {
+            TrackEntryKind::SugarGrams => {
+                view! { <SugarGramsForm/> }.into_any()
+            }
+        }}
+    </section>
+}
 ```
 
-Then each crate gets its own `Cargo.toml`.
+This follows the Leptos control-flow pattern:
 
-## Web Crate
+```rust
+{move || match signal.get() {
+    Variant => view! { <SomeComponent/> }.into_any(),
+}}
+```
 
-Move the current Leptos app into `web/`.
+Why this is good:
 
-Current files to move:
+- `kind.get()` makes the closure reactive.
+- changing the selector updates `kind`.
+- the `match` reruns and renders the correct form.
+- `.into_any()` keeps this working later when match branches return different component types.
+
+# Child Form
+
+`web/src/pages/track/sugar_grams_form.rs` should own only the fields for sugar grams.
+
+It should not know about the selector.
+
+It should own:
+
+- grams input state
+- submit behavior for sugar grams
+
+Current issue in the code:
+
+```rust
+let (calories, set_calories) = signal(0.0);
+```
+
+This should be grams, not calories.
+
+Also, the current view says:
+
+```rust
+<h1>"About"</h1>
+```
+
+That is placeholder text and should become the sugar grams form.
+
+Suggested shape:
+
+```rust
+use leptos::prelude::*;
+
+#[component]
+pub fn SugarGramsForm() -> impl IntoView {
+    let (grams, set_grams) = signal(String::new());
+
+    view! {
+        <form class="track-form">
+            <label class="field">
+                <span class="field-label">"Sugar grams"</span>
+                <input
+                    class="field-input"
+                    type="number"
+                    min="0"
+                    step="any"
+                    inputmode="decimal"
+                    placeholder="12.5"
+                    prop:value=grams
+                    on:input=move |event| {
+                        set_grams.set(event_target_value(&event));
+                    }
+                />
+            </label>
+
+            <button class="primary-button" type="submit">"Track"</button>
+        </form>
+    }
+}
+```
+
+Use `String` for form state because browser input values are strings.
+
+Parse on submit:
+
+```rust
+let grams = grams.get().parse::<f32>();
+```
+
+Then validate:
+
+```rust
+if grams < 0.0 {
+    // reject input
+}
+```
+
+# Common Types
+
+`common/src/track.rs` currently only has:
+
+```rust
+pub enum TrackEntryKind {
+    SugarGrams,
+}
+```
+
+That is enough for rendering the selector/switch.
+
+When the form starts submitting to the server, add:
+
+```rust
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct TrackRequest {
+    pub kind: TrackEntryKind,
+    pub grams: f32,
+}
+```
+
+Then re-export it from `common/src/lib.rs`:
+
+```rust
+pub use track::{TrackEntryKind, TrackRequest};
+```
+
+For now, if there is no network submit yet, `TrackRequest` can wait.
+
+# CSS Classes Needed
+
+Use these classes for the Track page:
 
 ```text
-Cargo.toml      -> web/Cargo.toml
-index.html      -> web/index.html
-main.css        -> web/main.css
-src/            -> web/src/
+page
+page--track
+page-header
+page-title
+page-subtitle
+field
+field-label
+field-input
+track-form
+primary-button
 ```
 
-The web crate should depend on `common`:
+Recommended ownership:
 
-```toml
-[dependencies]
-common = { path = "../common" }
-console_error_panic_hook = "0.1.7"
-leptos = { version = "0.8.19", features = ["csr"] }
+- `page page--track`: outer Track page section
+- `page-header`: title/subtitle wrapper
+- `field`: label + input/select group
+- `field-label`: label text
+- `field-input`: select/input styling
+- `track-form`: sugar grams form container
+- `primary-button`: submit button
+
+# Current Code Fix List
+
+In `web/src/pages/track.rs`:
+
+- keep the selector
+- fill in the `on:change` handler
+- keep the reactive `match`
+- keep rendering `SugarGramsForm`
+
+In `web/src/pages/track/sugar_grams_form.rs`:
+
+- rename `calories` state to `grams`
+- use `String::new()` instead of `0.0` for input state
+- replace the `"About"` placeholder with a form
+- use `type="number"`, `step="any"`, and `inputmode="decimal"`
+
+Do not remove the selector just because there is only one option right now. The selector is part of the intended expandable design.
+
+# Input Cursor Jump Debug
+
+Current input:
+
+```rust
+<input
+    class="input-field"
+    type="number"
+    min="0"
+    step="any"
+    inputmode="decimal"
+    placeholder="12.5"
+    prop:value=grams
+    on:input=move |event| {
+        set_grams.set(event_target_value(&event));
+    }
+/>
 ```
 
-Run the web app from `web/`:
+The glitch is likely caused by:
 
-```sh
-cd web
-trunk serve --open
+```rust
+prop:value=grams
 ```
 
-## Server Crate
+That makes the input controlled. On every `input` event:
 
-Create a minimal `server` crate with only a main function for now.
+1. browser updates the input
+2. Leptos reads the value
+3. signal updates
+4. Leptos writes `prop:value` back into the input
 
-The server crate should also depend on `common`:
+For `type="number"`, values like `.` or `12.` are awkward intermediate states. The browser may normalize them, and the controlled write can reset the cursor position.
 
-```toml
-[dependencies]
-common = { path = "../common" }
+## Recommended Fix
+
+For this form, use an uncontrolled input:
+
+```rust
+<input
+    class="field-input"
+    type="number"
+    min="0"
+    step="any"
+    inputmode="decimal"
+    placeholder="12.5"
+    on:input=move |event| {
+        set_grams.set(event_target_value(&event));
+    }
+/>
 ```
 
-Later, when the REST API is ready, add Axum or another web framework here.
+Remove:
 
-## Refactor Steps
+```rust
+prop:value=grams
+```
 
-1. Create `web/`, `server/`, and `common/`.
-2. Move the existing Leptos app into `web/`.
-3. Replace the root `Cargo.toml` with a workspace `Cargo.toml`.
-4. Create `common/Cargo.toml` and `common/src/lib.rs`.
-5. Create `server/Cargo.toml` and `server/src/main.rs`.
-6. Add `common = { path = "../common" }` to both `web` and `server`.
-7. Run `cargo check` from the workspace root.
-8. Run `cargo check -p challenge-pot-web`.
-9. Run `cargo check -p challenge-pot-server`.
-10. Run `trunk serve --open` from `web/`.
+The signal will still update as the user types, but Leptos will not rewrite the input value on every keystroke.
 
-## Notes
+## Even Smoother Option
 
-Do not move code yet. This is the proposed structure. After approval, make the refactor in small steps and verify after each major step.
+If `type="number"` still behaves badly with decimal typing, use `type="text"` with decimal keyboard hints:
+
+```rust
+<input
+    class="field-input"
+    type="text"
+    inputmode="decimal"
+    placeholder="12.5"
+    on:input=move |event| {
+        set_grams.set(event_target_value(&event));
+    }
+/>
+```
+
+Then parse and validate on submit:
+
+```rust
+let grams = grams.get().parse::<f32>();
+```
+
+This usually gives the best typing experience because the browser does not try to enforce numeric formatting while the user is still editing.
+
+## Small Class Name Issue
+
+The current input uses:
+
+```rust
+class="input-field"
+```
+
+The notes/CSS plan use:
+
+```rust
+class="field-input"
+```
+
+Pick one class name and use it consistently. Prefer `field-input` because it matches the `field` / `field-label` naming.
