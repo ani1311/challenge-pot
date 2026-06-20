@@ -5,6 +5,7 @@ use leptos_router::path;
 
 mod components;
 mod pages;
+mod api;
 
 use components::bottom_bar::BottomBar;
 
