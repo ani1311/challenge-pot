@@ -12,7 +12,7 @@ async fn main() {
 
     let app= presentation::http::router(state);
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3002")
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3002")
         .await
         .expect("bind server address");
 
