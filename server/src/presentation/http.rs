@@ -7,7 +7,7 @@ use tower_http::cors::{Any, CorsLayer};
 
 use crate::{
     infrastructure::fs_persistence::FsPersistence,
-    presentation::http::handlers::{get_leaderboard, health},
+    presentation::http::handlers::{get_leaderboard, health, track::track},
 };
 
 pub mod handlers;
@@ -27,6 +27,7 @@ pub fn router(state: AppState) -> Router {
 
     let protected_routes = Router::new()
         .route("/leaderboard", get(get_leaderboard))
+        .route("/track", post(track))
         .route_layer(middleware::from_fn(auth::auth_middleware));
 
 
