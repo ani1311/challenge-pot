@@ -24,7 +24,7 @@ pub fn get_leaderboard(activity_repo: &impl ActivityRepository, user_repo: &impl
     });
 
     let mut rows: Vec<LeaderboardRow> = user_to_points.iter().map(|(k,v)|{
-        let user = user_repo.get_user(&k);
+        let user = user_repo.get_user_by_user_id(&k);
 
         LeaderboardRow{
             user: user,

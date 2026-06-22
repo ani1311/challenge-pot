@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use challenge_pot_server::{infrastructure::fs_persistence::FsPersistence, presentation::{self, http::AppState}};
 
-const DATA_DIR: &str = "/tmp/challenge-pot";
+const DATA_DIR: &str = "db";
 
 #[tokio::main]
 async fn main() {

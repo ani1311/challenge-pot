@@ -1,106 +1,154 @@
-# Loading leaderboard data in a Leptos component
+# Implementing the login form
 
-`fetch_leaderboard` sends an HTTP request and waits for its response, so it is
-an `async` function:
+The router and `AuthState` are already in place. The remaining work is:
 
-```rust
-pub async fn fetch_leaderboard() -> Result<LeaderboardResponse, gloo_net::Error>
-```
+1. Add an API client for `POST /login`.
+2. Render a username form in `pages/login.rs`.
+3. On a successful response, store the JWT and navigate to `/leaderboard`.
 
-Its result has two layers:
+Keep the HTTP code out of the component. The component should only manage form
+state and call the API function.
 
-- `Result` represents whether the HTTP request and JSON decoding succeeded.
-- On success, `LeaderboardResponse` contains the rows in its `entries` field.
+## 1. Export a login API module
 
-```text
-fetch_leaderboard()
-    -> Result<LeaderboardResponse, gloo_net::Error>
-    -> Result<{ entries: Vec<LeaderboardEntry> }, error>
-```
-
-## Why the component cannot use `.await` directly
-
-A normal Leptos `#[component]` function builds the initial UI synchronously and
-returns a view. Rust only permits `.await` inside an `async` function, and a
-browser request completes later, after the component has already rendered.
-
-`LocalResource` connects that asynchronous work to Leptos reactivity. It starts
-the future in the browser and exposes its current value to the view. Use
-`LocalResource` here because the web crate is configured for client-side
-rendering (`leptos` has the `csr` feature) and the browser HTTP future does not
-need to be `Send`.
-
-## Component implementation
+Update `web/src/api.rs`:
 
 ```rust
-use leptos::prelude::*;
+pub mod client;
+pub mod leaderboard;
+pub mod login;
+```
 
-use crate::api;
+## 2. Add `web/src/api/login.rs`
 
-#[component]
-pub fn Leaderboard() -> impl IntoView {
-    let leaderboard = LocalResource::new(|| async {
-        api::leaderboard::fetch_leaderboard().await
-    });
+`LoginRequest`, `LoginResponse`, and `ApiErrorResponse` exist in the `common`
+crate. Deserialize a successful response as `LoginResponse`; for a non-2xx
+response, deserialize `ApiErrorResponse` and map its typed `ErrorCode` to a
+display string. Keep the API function's existing `Result<LoginResponse,
+String>` return type so the page does not need to change.
 
-    view! {
-        {move || leaderboard.map(|result| match result {
-            Ok(response) => view! {
-                <table>
-                    <thead>
-                        <tr>
-                            <th>"Username"</th>
-                            <th>"Points"</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {response.entries.iter().map(|entry| {
-                            let username = entry.user.username.clone();
-                            let points = entry.points;
+```rust
+use common::{
+    api_error::{ApiErrorResponse, ErrorCode},
+    login::{LoginRequest, LoginResponse},
+};
+use gloo_net::http::Request;
 
-                            view! {
-                                <tr>
-                                    <td>{username}</td>
-                                    <td>{points}</td>
-                                </tr>
-                            }
-                        }).collect_view()}
-                    </tbody>
-                </table>
-            }.into_any(),
+use crate::api::client::api_url;
 
-            Err(error) => view! {
-                <p>"Failed to load leaderboard: " {error.to_string()}</p>
-            }.into_any(),
-        }).unwrap_or_else(|| view! {
-            <p>"Loading leaderboard..."</p>
-        }.into_any())}
+pub async fn login(username: String) -> Result<LoginResponse, String> {
+    let response = Request::post(&api_url("/login"))
+        .json(&LoginRequest { username })
+        .map_err(|error| error.to_string())?
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
+
+    if response.ok() {
+        return response
+            .json::<LoginResponse>()
+            .await
+            .map_err(|error| error.to_string());
+    }
+
+    let error = response
+        .json::<ApiErrorResponse>()
+        .await
+        .map_err(|_| "Could not log in. Try again.".to_owned())?;
+
+    match error.code {
+        ErrorCode::UserNotFound => Err("That username does not exist.".to_owned()),
+        ErrorCode::InternalError => Err("Could not log in. Try again.".to_owned()),
     }
 }
 ```
 
-## What each part does
+## 3. Replace `web/src/pages/login.rs`
 
-1. `LocalResource::new` receives a closure that creates the request future. The
-   closure is rerun if it reads reactive values that later change; this closure
-   currently reads none, so it loads once for the component instance.
-2. Do not call `.expect(...)` inside the resource. Keeping the `Result` lets the
-   UI show a useful failure state instead of panicking the application.
-3. `leaderboard.map(...)` reactively borrows the loaded value and transforms it
-   only when it is available. Unlike `get()`, it does not require the resource
-   value to implement `Clone`.
-4. The `result` passed to `map` is a borrowed
-   `Result<LeaderboardResponse, gloo_net::Error>`, so the match handles either
-   `Ok(response)` or `Err(error)` without taking ownership from the resource.
-5. `response.entries` is the list to render. The response itself is not an
-   iterator.
-6. `iter()` borrows the entries. Cloning `username` gives each row an owned
-   value that can safely be retained by the rendered view.
-7. `unwrap_or_else` handles `None`, which is the loading state. Calling `map`
-   inside a reactive view closure causes Leptos to rerender this section when
-   the request completes, so no `Suspense` boundary is needed.
+```rust
+use leptos::prelude::*;
+use leptos::task::spawn_local;
+use leptos_router::hooks::use_navigate;
 
-The imports `LeaderboardEntry` and `LeaderboardUser` are not required by this
-component: their types are inferred from `response.entries`. An unused
-`use leaderboard::fetch_leaderboard;` in `web/src/api.rs` can also be removed;
-the component calls the public module path directly.
+use crate::{api, auth::AuthState};
+
+#[component]
+pub fn Login() -> impl IntoView {
+    let auth = expect_context::<AuthState>();
+    let navigate = use_navigate();
+
+    let (username, set_username) = signal(String::new());
+    let (error, set_error) = signal(None::<String>);
+    let (submitting, set_submitting) = signal(false);
+
+    let submit = move |event: leptos::ev::SubmitEvent| {
+        event.prevent_default();
+
+        let username = username.get().trim().to_owned();
+
+        if username.is_empty() {
+            set_error.set(Some("Enter a username.".to_owned()));
+            return;
+        }
+
+        set_error.set(None);
+        set_submitting.set(true);
+
+        spawn_local(async move {
+            match api::login::login(username).await {
+                Ok(response) => {
+                    auth.login(response.jwt);
+                    navigate("/leaderboard", Default::default());
+                }
+                Err(message) => {
+                    set_error.set(Some(message));
+                    set_submitting.set(false);
+                }
+            }
+        });
+    };
+
+    view! {
+        <section class="page page--login">
+            <header class="page-header">
+                <h1 class="page-title">"Login"</h1>
+                <p class="page-subtitle">"Choose a username to continue."</p>
+            </header>
+
+            <form class="login-form" on:submit=submit>
+                <label class="field">
+                    <span class="field-label">"Username"</span>
+                    <input
+                        class="field-input"
+                        type="text"
+                        required
+                        autocomplete="username"
+                        prop:value=move || username.get()
+                        on:input=move |event| set_username.set(event_target_value(&event))
+                    />
+                </label>
+
+                {move || error.get().map(|message| view! {
+                    <p class="form-error" role="alert">{message}</p>
+                })}
+
+                <button
+                    class="primary-button"
+                    type="submit"
+                    disabled=move || submitting.get()
+                >
+                    {move || if submitting.get() { "Logging in..." } else { "Login" }}
+                </button>
+            </form>
+        </section>
+    }
+}
+```
+
+## Flow
+
+Submitting the form prevents the browser's normal form navigation, validates
+the username, and starts an asynchronous request. On success, the response JWT
+is stored in `AuthState`, so `ProtectedRoute` permits protected pages, then
+`navigate` redirects to `/leaderboard`. On failure, the error is rendered and
+the button is re-enabled.

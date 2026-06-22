@@ -1,7 +1,11 @@
+
+use std::io::Error;
+
 use crate::domain::{ActivityLog, user::{User, UserId}};
 
 pub trait UserRepository {
-    fn get_user(&self, user_id: &UserId) -> User;
+    fn get_user_by_user_id(&self, user_id: &UserId) -> User;
+    fn get_user_by_username(&self, username: String) -> Result<User, Error>;
 }
 
 pub trait ActivityRepository {

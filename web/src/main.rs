@@ -6,8 +6,11 @@ use leptos_router::path;
 mod components;
 mod pages;
 mod api;
+mod auth;
 
 use components::bottom_bar::BottomBar;
+
+use crate::auth::AuthState;
 
 fn main() {
     console_error_panic_hook::set_once();
@@ -17,15 +20,31 @@ fn main() {
 
 #[component]
 fn App() -> impl IntoView {
+    let auth = AuthState::new();
+    provide_context(auth);
+
     view! {
         <Router>
             <BottomBar/>
             <main>
                 <Routes fallback=|| "Not found.">
-                    <Route path=path!("/") view=||"home"/>
-                    <Route path=path!("/leaderboard") view=pages::Leaderboard/>
-                    <Route path=path!("/track") view=pages::Track/>
+                    <Route path=path!("/") view=|| view! {<Redirect path="/login"/>}/>
                     <Route path=path!("/about") view=pages::About/>
+                    <Route path=path!("/login") view=pages::Login/>
+
+                    <ProtectedRoute 
+                        path=path!("/leaderboard") 
+                        view=pages::Leaderboard
+                        condition=move || Some(auth.is_authenticated())
+                        redirect_path=|| "/login"
+                    />
+
+                    <ProtectedRoute 
+                        path=path!("/track") 
+                        view=pages::Track
+                        condition=move || Some(auth.is_authenticated())
+                        redirect_path=|| "/login"
+                    />
                 </Routes>
             </main>
         </Router>
