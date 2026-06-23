@@ -244,6 +244,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tower-http",
+ "uuid",
 ]
 
 [[package]]
@@ -255,6 +256,7 @@ dependencies = [
  "gloo-net 0.7.0",
  "leptos",
  "leptos_router",
+ "web-sys",
 ]
 
 [[package]]
@@ -266,6 +268,7 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
+ "serde",
  "wasm-bindgen",
  "windows-link",
 ]
@@ -2718,6 +2721,7 @@ checksum = "144d6b123cef80b301b8f72a9e2ca4370ddec21950d0a103dd22c437006d2db7"
 dependencies = [
  "getrandom 0.4.2",
  "js-sys",
+ "serde_core",
  "wasm-bindgen",
 ]
 

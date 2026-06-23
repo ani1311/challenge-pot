@@ -1,3 +1,4 @@
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -15,4 +16,5 @@ pub enum StoredActivity {
 pub struct StoredActivityLog {
     pub user_id: String,
     pub activity: StoredActivity,
+    pub created_at: chrono::DateTime<Utc>
 }

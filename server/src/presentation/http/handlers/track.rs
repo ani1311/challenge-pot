@@ -1,11 +1,29 @@
-use axum::{Json, extract::State};
-use common::{TrackRequest, api_error::ApiErrorResponse};
+use axum::{
+    Json,
+    extract::{Extension, State},
+    http::StatusCode,
+};
+use common::{TrackEntryKind, TrackRequest};
 
-use crate::presentation::http::{AppState, error::ApiError};
-
+use crate::{
+    application,
+    domain::Activity,
+    presentation::http::{AppState, auth::AuthUser, error::ApiError},
+};
 
 pub async fn track(
-    State(state): State<AppState>
-) -> Result<(), ApiError> {
-    Ok(())
+    State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
+    Json(request): Json<TrackRequest>,
+) -> Result<StatusCode, ApiError> {
+    let activity = match request.kind {
+        TrackEntryKind::SugarGrams => Activity::EatSugar {
+            grams: request.grams,
+        },
+    };
+
+    application::track_activity(auth_user.user_id, activity, state.persistence.as_ref())
+        .map_err(ApiError::internal)?;
+
+    Ok(StatusCode::NO_CONTENT)
 }

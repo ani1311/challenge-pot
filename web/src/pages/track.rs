@@ -1,12 +1,55 @@
-use common::TrackEntryKind;
-use leptos::prelude::*;
+use common::{TrackEntryKind, TrackRequest};
+use leptos::{ev::SubmitEvent, prelude::*, reactive::spawn_local};
 
-mod sugar_grams_form;
-use sugar_grams_form::SugarGramsForm;
+use crate::{api, auth::AuthState};
 
 #[component]
 pub fn Track() -> impl IntoView {
-    let (kind, set_kind) = signal(TrackEntryKind::SugarGrams);
+    let auth = expect_context::<AuthState>();
+    let (grams, set_grams) = signal(String::new());
+    let (error, set_error) = signal(None::<String>);
+    let (submitting, set_submitting) = signal(false);
+
+    let submit = move |event: SubmitEvent| {
+        event.prevent_default();
+
+        let grams = match grams.get().trim().parse::<f32>() {
+            Ok(grams) if grams >= 0.0 => grams,
+            _ => {
+                set_error.set(Some("Enter a non-negative number of grams.".to_owned()));
+                return;
+            }
+        };
+        let Some(token) = auth.token() else {
+            set_error.set(Some("Your session has expired. Log in again.".to_owned()));
+            return;
+        };
+
+        set_error.set(None);
+        set_submitting.set(true);
+
+        spawn_local(async move {
+            match api::track::track(
+                token,
+                TrackRequest {
+                    kind: TrackEntryKind::SugarGrams,
+                    grams,
+                },
+            )
+            .await
+            {
+                Ok(()) => {
+                    set_grams.set(String::new());
+                    set_submitting.set(false);
+                }
+                Err(message) => {
+                    set_error.set(Some(message));
+                    set_submitting.set(false);
+                }
+            }
+        });
+    };
+
     view! {
         <section class="page page--track">
             <header class="page-header">
@@ -14,33 +57,33 @@ pub fn Track() -> impl IntoView {
                 <p class="page-subtitle">"Log sugar from something you just ate."</p>
             </header>
 
-            <label class="field">
-                <span class="field-label">"Type"</span>
-                <select
-                    class="field-input"
-                    on:change=move |event| {
-                        let selected = match event_target_value(&event).as_str() {
-                            "sugar-grams" => TrackEntryKind::SugarGrams,
-                            _ => TrackEntryKind::SugarGrams,
-                        };
+            <form class="track-form" on:submit=submit>
+                <label class="field">
+                    <span class="field-label">"Sugar grams"</span>
+                    <input
+                        class="input-field"
+                        type="number"
+                        min="0"
+                        step="any"
+                        inputmode="decimal"
+                        placeholder="12.5"
+                        prop:value=move || grams.get()
+                        on:input=move |event| set_grams.set(event_target_value(&event))
+                    />
+                </label>
 
-                        set_kind.set(selected);
-                    }
+                {move || error.get().map(|message| view! {
+                    <p class="form-error" role="alert">{message}</p>
+                })}
+
+                <button
+                    class="primary-button"
+                    type="submit"
+                    disabled=move || submitting.get()
                 >
-                    <option value="sugar-grams">"Sugar grams"</option>
-                </select>
-            </label>
-
-
-            {move || match kind.get() {
-                TrackEntryKind::SugarGrams => {
-                    view! {
-                        <SugarGramsForm/>
-                    }.into_any()
-                }
-            }}
-
-            <button class="primary-button" type="button">"Track"</button>
+                    {move || if submitting.get() { "Saving..." } else { "Track" }}
+                </button>
+            </form>
         </section>
     }
 }

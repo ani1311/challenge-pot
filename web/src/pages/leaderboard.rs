@@ -1,21 +1,26 @@
 use leptos::prelude::*;
 
-use crate::api;
+use crate::{api, auth::AuthState};
 
 mod table;
 
 #[component]
 pub fn Leaderboard() -> impl IntoView {
+    let auth = expect_context::<AuthState>();
 
-    let leaderboard = LocalResource::new(|| async {
-        api::leaderboard::fetch_leaderboard().await
+    let leaderboard = LocalResource::new(move || async move {
+        let token = auth
+            .token()
+            .ok_or_else(|| "Your session has expired. Log in again.".to_owned())?;
+
+        api::leaderboard::fetch_leaderboard(token).await
     });
 
     view! {
         {move || match leaderboard.get(){
             Some(Ok(resp)) => view! {
                     <table>
-                        <thead> 
+                        <thead>
                             <tr>
                                 <th> "Username" </th>
                                 <th> "Points" </th>
