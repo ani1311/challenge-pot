@@ -76,4 +76,3 @@ pub fn Login() -> impl IntoView {
         </section>
     }
 }
-

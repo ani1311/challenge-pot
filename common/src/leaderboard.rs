@@ -9,7 +9,7 @@ pub struct LeaderboardResponse {
 pub struct LeaderboardEntry {
     pub user: LeaderboardUser,
     pub points: f32,
-    pub rank: u32
+    pub rank: u32,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

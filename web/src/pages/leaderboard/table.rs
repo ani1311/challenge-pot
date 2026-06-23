@@ -1,6 +1,4 @@
-
 use leptos::prelude::*;
-
 
 #[component]
 pub fn Leaderboard() -> impl IntoView {
@@ -8,4 +6,3 @@ pub fn Leaderboard() -> impl IntoView {
         <h1> "Leaderboard" </h1>
     }
 }
-

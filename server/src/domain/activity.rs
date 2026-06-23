@@ -1,23 +1,20 @@
-use crate::domain::{user::User};
+use crate::domain::user::User;
 
 pub type Points = f32;
 
 pub enum Activity {
-    EatSugar{grams: f32}
+    EatSugar { grams: f32 },
 }
-
 
 impl Activity {
     pub fn points(&self) -> Points {
         match self {
-            Activity::EatSugar { grams } => { 
-                *grams
-            }
+            Activity::EatSugar { grams } => *grams,
         }
     }
 }
 
 pub struct ActivityLog {
     pub user: User,
-    pub activity: Activity
+    pub activity: Activity,
 }

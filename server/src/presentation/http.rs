@@ -1,7 +1,13 @@
 use std::sync::Arc;
 
 use axum::{
-    Router, http::{Method, header::CONTENT_TYPE}, middleware, routing::{get, post}
+    Router,
+    http::{
+        Method,
+        header::{AUTHORIZATION, CONTENT_TYPE},
+    },
+    middleware,
+    routing::{get, post},
 };
 use tower_http::cors::{Any, CorsLayer};
 
@@ -10,9 +16,9 @@ use crate::{
     presentation::http::handlers::{get_leaderboard, health, track::track},
 };
 
-pub mod handlers;
 mod auth;
 mod error;
+pub mod handlers;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -23,13 +29,12 @@ pub fn router(state: AppState) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods([Method::GET, Method::POST])
-        .allow_headers([CONTENT_TYPE]);
+        .allow_headers([AUTHORIZATION, CONTENT_TYPE]);
 
     let protected_routes = Router::new()
         .route("/leaderboard", get(get_leaderboard))
         .route("/track", post(track))
         .route_layer(middleware::from_fn(auth::auth_middleware));
-
 
     Router::new()
         .route("/health", get(health))
