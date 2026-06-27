@@ -28,6 +28,7 @@ fn App() -> impl IntoView {
             <main>
                 <Routes fallback=|| "Not found.">
                     <Route path=path!("/") view=|| view! {<Redirect path="/login"/>}/>
+                    <Route path=path!("/challenge-pot") view=|| view! {<Redirect path="/login"/>}/>
                     <Route path=path!("/about") view=pages::About/>
                     <Route path=path!("/login") view=pages::Login/>
 

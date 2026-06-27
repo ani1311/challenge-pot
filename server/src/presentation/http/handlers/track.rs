@@ -6,7 +6,9 @@ use axum::{
 use common::TrackRequest;
 
 use crate::{
-    application, domain::Activity, presentation::http::{AppState, auth::AuthUser, error::ApiError},
+    application,
+    domain::Activity,
+    presentation::http::{AppState, auth::AuthUser, error::ApiError},
 };
 
 pub async fn track(

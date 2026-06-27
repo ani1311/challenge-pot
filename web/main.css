@@ -113,6 +113,42 @@ select:focus {
   border-radius: 0.6rem;
 }
 
+.about-section {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.about-section h2 {
+  margin: 0;
+  color: #fff8b8;
+  font-size: 1.25rem;
+  line-height: 1.2;
+}
+
+.about-table td:last-child {
+  color: #fff8b8;
+  font-weight: 700;
+}
+
+.example-list {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.example-list strong {
+  color: #fff8b8;
+}
+
+.points-positive {
+  color: #ff9d7a;
+  font-weight: 800;
+}
+
+.points-negative {
+  color: #8fe3b0;
+  font-weight: 800;
+}
+
 .primary-button {
   width: 100%;
   min-height: 3.25rem;
