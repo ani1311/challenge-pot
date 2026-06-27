@@ -18,6 +18,7 @@ use crate::{
 
 mod auth;
 mod error;
+mod mapper;
 pub mod handlers;
 
 #[derive(Clone)]

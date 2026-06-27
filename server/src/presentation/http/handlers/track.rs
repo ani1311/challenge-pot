@@ -3,12 +3,10 @@ use axum::{
     extract::{Extension, State},
     http::StatusCode,
 };
-use common::{TrackEntryKind, TrackRequest};
+use common::TrackRequest;
 
 use crate::{
-    application,
-    domain::Activity,
-    presentation::http::{AppState, auth::AuthUser, error::ApiError},
+    application, domain::Activity, presentation::http::{AppState, auth::AuthUser, error::ApiError},
 };
 
 pub async fn track(
@@ -16,11 +14,7 @@ pub async fn track(
     Extension(auth_user): Extension<AuthUser>,
     Json(request): Json<TrackRequest>,
 ) -> Result<StatusCode, ApiError> {
-    let activity = match request.kind {
-        TrackEntryKind::SugarGrams => Activity::EatSugar {
-            grams: request.grams,
-        },
-    };
+    let activity = Activity::from(request.kind);
 
     application::track_activity(auth_user.user_id, activity, state.persistence.as_ref())
         .map_err(ApiError::internal)?;

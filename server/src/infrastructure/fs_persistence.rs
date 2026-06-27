@@ -4,11 +4,8 @@ use std::{
 };
 
 use crate::{
-    application::ports::{ActivityRepository, UserRepository},
-    domain::{Activity, user::UserId},
-    infrastructure::fs_persistence::{
-        mappers::{to_activity_log, to_user},
-        models::{StoredActivity, StoredActivityLog},
+    application::ports::{ActivityRepository, UserRepository}, domain::{Activity, user::UserId}, infrastructure::fs_persistence::{
+        mappers::{to_activity_log, to_user}, models::{StoredActivity, StoredActivityLog},
     },
 };
 
@@ -64,9 +61,7 @@ impl ActivityRepository for FsPersistence {
         let activity_path = self.data_dir.join(ACTIVITY_SUB_DIR);
         fs::create_dir_all(&activity_path)?;
 
-        let stored_activity = match activity {
-            Activity::EatSugar { grams } => StoredActivity::EatSugar { grams },
-        };
+        let stored_activity = StoredActivity::from(activity); 
         let stored_log = StoredActivityLog {
             user_id: user_id.clone(),
             activity: stored_activity,
